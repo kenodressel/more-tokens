@@ -4,19 +4,21 @@
       <div class="columns reverse-row-order">
         <div class="column is-4">
           <img
-            v-if="!loading"
-            src="../assets/monster.png"
-            width="100%"
-            alt=""
+              v-if="!loading"
+              src="../assets/monster.png"
+              width="100%"
+              style="max-width: 50vw"
+              alt=""
           />
-          <img v-else src="../assets/moretokens.gif" width="100%" alt="" />
+          <img v-else src="../assets/moretokens.gif" width="100%"
+               style="max-width: 50vw" alt=""/>
         </div>
         <div class="column is-5">
           <h3 class="pl-3 has-text-left is-size-3">
             More Tokens 🔥🔥🔥
           </h3>
 
-          <div class="column is-10">
+          <div class="column">
             <div class="content">
               <b-message v-if="error" type="is-danger">
                 {{ error }}
@@ -25,77 +27,80 @@
             <form @submit.prevent="moreTokens">
               <div class="field">
                 <div class="control">
+                  <label class="is-justify-content-left">Name</label>
                   <input
-                    class="input is-primary"
-                    type="text"
-                    v-model="token.name"
-                    placeholder="Token"
+                      class="input is-primary"
+                      type="text"
+                      v-model="token.name"
+                      placeholder="Token"
                   />
                 </div>
               </div>
               <div class="field">
                 <div class="control">
+                  <label>Symbol</label>
                   <input
-                    class="input is-primary"
-                    type="number"
-                    v-model="token.balanceOwner"
-                    maxlength="15"
-                    placeholder="Owner's balance"
+                      class="input is-primary"
+                      type="text"
+                      v-model="token.symbol"
+                      placeholder="TKN"
+                  />
+                </div>
+              </div>
+              <div class="field">
+                <div class="control">
+                  <label>Owner's balance</label>
+                  <input
+                      class="input is-primary"
+                      type="number"
+                      v-model="token.balanceOwner"
+                      maxlength="15"
+                      placeholder="1000"
                   />
                 </div>
               </div>
               <progress
-                v-if="loading"
-                class="progress is-small is-primary"
-                max="100"
-                >15%</progress
-              >
+                  v-if="loading"
+                  class="progress is-small is-primary"
+                  max="100"
+              >15%</progress>
               <b-button
-                native-type="submit"
-                class="is-rounded"
-                type="is-primary"
-                size="is-large"
-                >Token 🚀</b-button
+                  native-type="submit"
+                  class="is-rounded"
+                  type="is-primary"
+                  size="is-large"
+              >Token 🚀
+              </b-button
               >
             </form>
-          </div>
-        </div>
-        <div class="columns is-2">
-          <div class="column has-text-right is-offset-9">
-            <div class="field">
-              <b-switch
-                v-model="networkId"
-                true-value="Mainnet"
-                false-value="Testnet"
-                disabled
-              >
-                {{ networkId }}
-              </b-switch>
-            </div>
-            <span class="text-grey-dark">$whoami</span>
-            <div v-if="addressResponse">
-              <div class="mb-2">
-                <ae-address
-                  class="inline-flex"
-                  :value="addressResponse.result"
-                  length="short"
-                />
-              </div>
-              <div>
-                <span class="text-grey-dark">💸 {{ getBalance }} AE</span>
-              </div>
-            </div>
           </div>
         </div>
       </div>
       <div class="columns">
         <div class="column has-text-left is-offset-4">
-          <span class="text-grey-dark">$logger</span>
+          <div class="text-grey-dark has-text-weight-bold" v-if="hasDeployedTokens">$logger</div>
           <ul class="log-tokens">
             <li v-for="token in deployed" :key="token.name">
-              [ name: {{ token.name }}, address: {{ token.address }} ]
+              name: <span class="has-text-weight-bold">{{ token.name }}</span><br />
+              address: <span class="has-text-weight-bold ae-contract-address">{{ token.address }}</span>
             </li>
           </ul>
+          <div class="text-grey-dark has-text-weight-bold mt-4">$whoami</div>
+          <div v-if="addressResponse">
+            <span class="mb-2 ae-address">
+              {{ addressResponse.result }}
+            </span>
+            <div>
+              <span class="text-grey-dark">💸 {{ getBalance }} AE</span>
+            </div>
+            <div>
+              <span class="text-grey-dark">⛓️ {{ networkName }}</span>
+            </div>
+          </div>
+          <div v-else>
+            Connecting to wallet...
+          </div>
+
         </div>
       </div>
     </div>
@@ -105,27 +110,20 @@
 <script>
 import { RpcAepp } from '@aeternity/aepp-sdk/es';
 import Detector from '@aeternity/aepp-sdk/es/utils/aepp-wallet-communication/wallet-detector';
-import BrowserWindowMessageConnection from '@aeternity/aepp-sdk/es/utils/aepp-wallet-communication/connection/browser-window-message';
+import BrowserWindowMessageConnection
+  from '@aeternity/aepp-sdk/es/utils/aepp-wallet-communication/connection/browser-window-message';
 import Node from '@aeternity/aepp-sdk/es/node';
 import FUNGIBLE_TOKEN_CONTRACT from 'aeternity-fungible-token/FungibleTokenFull.aes';
-import { AeAddress } from '@aeternity/aepp-components';
-import axios from 'axios';
 
-// Send wallet connection info to Aepp throug content script
+// Send wallet connection info to Aepp through content script
 const networks = {
-  Mainnet: {
-    TOKEN_REGISTRY_URL:
-      'https://raendom-backend.z52da5wt.xyz/tokenCache/addToken',
+  ae_mainnet: {
     NODE_URL: 'https://mainnet.aeternity.io',
-    NODE_INTERNAL_URL: 'https://mainnet.aeternity.io',
-    COMPILER_URL: 'https://latest.compiler.aepps.com',
+    COMPILER_URL: 'https://compiler.aeternity.io',
   },
-  Testnet: {
-    TOKEN_REGISTRY_URL:
-      'https://testnet.superhero.aeternity.art/tokenCache/addToken',
+  ae_uat: {
     NODE_URL: 'https://testnet.aeternity.io',
-    NODE_INTERNAL_URL: 'https://testnet.aeternity.io',
-    COMPILER_URL: 'https://latest.compiler.aepps.com',
+    COMPILER_URL: 'https://compiler.aeternity.io',
   },
 };
 
@@ -138,13 +136,10 @@ const errorAsField = async fn => {
 };
 
 export default {
-  name: 'Home',
-  components: {
-    AeAddress,
-  },
+  name: 'HomePage',
   data() {
     return {
-      networkId: 'Mainnet',
+      networkId: 'ae_mainnet',
       token: {
         name: null,
         decimals: 18,
@@ -163,6 +158,12 @@ export default {
     getBalance() {
       return this.convertToAE(this.balance);
     },
+    networkName() {
+      return this.networkId === 'ae_mainnet' ? 'Mainnet' : 'Testnet'
+    },
+    hasDeployedTokens() {
+      return this.deployed.length > 0
+    }
   },
   methods: {
     convertToAE(balance) {
@@ -171,22 +172,6 @@ export default {
     logDeployed(name, deployed) {
       console.log(deployed);
       this.deployed.push({ name, address: deployed.address });
-    },
-    async registrySubmit(address) {
-      try {
-        await axios.post(
-          networks[this.networkId].TOKEN_REGISTRY_URL,
-          { address },
-          {
-            headers: {
-              'content-type': 'application/json',
-            },
-          },
-        );
-      } catch (error) {
-        console.log(error);
-        this.error = '💥 Oops ... unable to add token to registry.';
-      }
     },
     resetForm() {
       this.token = {
@@ -197,10 +182,12 @@ export default {
       };
     },
     async switchNetwork(networkId) {
+      const nodeToSelect = this.client.getNodesInPool()
+          .find((node) => node.nodeNetworkId === networkId);
+      this.client.selectNode(nodeToSelect.name);
+      this.networkId = networkId;
       console.log('switchNetwork', networkId);
-      this.disconnect();
-      this.networkId = networkId == 'ae_mainnet' ? 'Mainnet' : 'Testnet';
-      this.initNode(networkId);
+      await this.updateData();
     },
     async moreTokens() {
       this.error = null;
@@ -210,18 +197,16 @@ export default {
           return;
         }
         this.loading = true;
-        this.token.symbol = this.token.name;
         const { name, decimals, symbol, balanceOwner } = this.token;
-        const contract = await this.client.getContractInstance(
-          FUNGIBLE_TOKEN_CONTRACT,
-        );
+        const contract = await this.client.getContractInstance({
+          source: FUNGIBLE_TOKEN_CONTRACT
+        });
         const init = await contract.deploy([
           name,
           decimals,
           symbol,
-          `${balanceOwner}${'0'.repeat(decimals)}`,
+          `${ balanceOwner }${ '0'.repeat(decimals) }`,
         ]);
-        this.registrySubmit(init.address);
         this.logDeployed(name, init);
         this.resetForm();
         this.loading = false;
@@ -229,7 +214,6 @@ export default {
         console.error(error);
         this.loading = false;
         this.error = '⚠️ Oops ... something went wrong.';
-        return;
       }
     },
     async disconnect() {
@@ -240,12 +224,7 @@ export default {
       this.addressResponse = null;
       this.scanForWallets();
     },
-    async connectToWallet(wallet) {
-      await this.client.connectToWallet(await wallet.getConnection());
-      this.accounts = await this.client.subscribeAddress(
-        'subscribe',
-        'connected',
-      );
+    async updateData() {
       this.pub = await this.client.address();
       this.onAccount = this.pub;
       this.balance = await this.client.getBalance(this.pub);
@@ -253,21 +232,26 @@ export default {
       this.addressResponse = await errorAsField(this.client.address());
       this.heightResponse = await errorAsField(this.client.height());
       this.nodeInfoResponse = await errorAsField(this.client.getNodeInfo());
-      this.compilerVersionResponse = await errorAsField(
-        this.client.getCompilerVersion(),
+      this.networkId = this.client.selectedNode.networkId;
+    },
+    async connectToWallet(wallet) {
+      await this.client.connectToWallet(await wallet.getConnection());
+      this.accounts = await this.client.subscribeAddress(
+          'subscribe',
+          'connected',
       );
+      if(wallet.networkId && this.client.networkId !== wallet.networkId) {
+        await this.switchNetwork(wallet.networkId);
+      } else {
+        await this.updateData();
+      }
     },
     async scanForWallets() {
       try {
-        const handleWallets = async function({ wallets, newWallet }) {
+        const handleWallets = async function ({ wallets, newWallet }) {
           newWallet = newWallet || Object.values(wallets)[0];
-          // if (confirm(`Do you want to connect to wallet ${newWallet.name}`)) {
-
-          // }
           this.detector.stopScan();
-
           await this.connectToWallet(newWallet);
-          // let addr = await this.client.askAddresses()
         };
 
         const scannerConnection = await BrowserWindowMessageConnection({
@@ -280,24 +264,28 @@ export default {
       }
     },
     async initNode(networkId) {
-      const node = await Node({
-        url: networks[networkId].NODE_URL,
-        internalUrl: networks[networkId].NODE_INTERNAL_URL,
-      });
       const that = this;
       this.client = await RpcAepp({
         name: 'AEPP',
-        nodes: [{ name: networkId, instance: node }],
+        nodes: [
+          {
+            name: 'Testnet', instance: await Node({
+              url: networks.ae_uat.NODE_URL,
+            })
+          },
+          {
+            name: 'Mainnet', instance: await Node({
+              url: networks.ae_mainnet.NODE_URL,
+            })
+          }
+        ],
         compilerUrl: networks[networkId].COMPILER_URL,
         onNetworkChange(params) {
-          console.log(params);
           if (this.getNetworkId() !== params.networkId) {
             console.log(
-              `Detected wallet network switch. Trying to initialize node for ${params.networkId}`,
+                `Detected wallet network switch. Trying to initialize node for ${ params.networkId }`,
             );
-            that.switchNetwork(
-              params.networkId == 'ae_mainnet' ? 'Mainnet' : 'Testnet',
-            );
+            that.switchNetwork(params.networkId);
           }
         },
         onAddressChange: async addresses => {
@@ -328,33 +316,15 @@ export default {
 </script>
 
 <style scoped>
-.log-tokens {
-  font-size: 10pt;
-}
-.inline-flex {
-  display: inline-flex;
-}
-.big-title {
-  font-size: 2.4375rem;
-  font-weight: 700;
-  line-height: 4.0625rem;
-  color: #203040;
-  margin: 1.5rem 0;
-}
-.ae-identicon {
-  box-shadow: 0 0 0 2px #ff0d6a;
-  border: 0.125rem solid transparent;
-  width: 2.625rem !important;
-  height: 2.625rem !important;
-}
 .ae-address {
-  font-weight: bold;
+  overflow-wrap: anywhere;
 }
+
+.ae-contract-address {
+  overflow-wrap: anywhere;
+}
+
 .ae-address li {
   list-style: none;
-}
-.ae-button.round {
-  height: 45px;
-  padding: 0 3rem;
 }
 </style>

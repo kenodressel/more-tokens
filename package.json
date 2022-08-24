@@ -8,23 +8,21 @@
     "lint": "vue-cli-service lint"
   },
   "dependencies": {
-    "@aeternity/aepp-components": "git+https://github.com/aeternity/aepp-components.git#develop",
-    "@aeternity/aepp-sdk": "^8.2.1",
-    "aeternity-fungible-token": "github:mradkov/aeternity-fungible-token",
-    "axios": "^0.21.1",
-    "bignumber.js": "^9.0.1",
-    "buefy": "^0.9.8",
-    "core-js": "^3.15.2",
-    "vue": "^2.6.14"
+    "@aeternity/aepp-sdk": "^11.0.1",
+    "aeternity-fungible-token": "github:aeternity/aeternity-fungible-token",
+    "bignumber.js": "^9.1.0",
+    "buefy": "^0.9.21",
+    "core-js": "^3.24.1",
+    "vue": "^2.7.10"
   },
   "devDependencies": {
-    "@vue/cli-plugin-babel": "^4.5.13",
-    "@vue/cli-plugin-eslint": "^4.5.13",
-    "@vue/cli-service": "^4.5.13",
+    "@vue/cli-plugin-babel": "^4.5.19",
+    "@vue/cli-plugin-eslint": "^4.5.19",
+    "@vue/cli-service": "^4.5.19",
     "babel-eslint": "^10.1.0",
-    "eslint": "^6.7.2",
-    "eslint-plugin-vue": "^6.2.2",
-    "vue-template-compiler": "^2.6.14"
+    "eslint": "^6.8.0",
+    "eslint-plugin-vue": "^9.4.0",
+    "vue-template-compiler": "^2.7.10"
   },
   "eslintConfig": {
     "root": true,
