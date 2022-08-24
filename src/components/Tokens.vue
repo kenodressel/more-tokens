@@ -59,11 +59,23 @@
                   />
                 </div>
               </div>
+              <div class="field" v-if="isMobile">
+                <div class="control">
+                  <label>Owner's address</label>
+                  <input
+                      class="input is-primary"
+                      type="text"
+                      v-model="ownerAddress"
+                      placeholder="ak_yourPublicKey"
+                  />
+                </div>
+              </div>
               <progress
                   v-if="loading"
                   class="progress is-small is-primary"
                   max="100"
-              >15%</progress>
+              >15%
+              </progress>
               <b-button
                   native-type="submit"
                   class="is-rounded"
@@ -81,11 +93,11 @@
           <div class="text-grey-dark has-text-weight-bold" v-if="hasDeployedTokens">$logger</div>
           <ul class="log-tokens">
             <li v-for="token in deployed" :key="token.name">
-              name: <span class="has-text-weight-bold">{{ token.name }}</span><br />
+              name: <span class="has-text-weight-bold">{{ token.name }}</span><br/>
               address: <span class="has-text-weight-bold ae-contract-address">{{ token.address }}</span>
             </li>
           </ul>
-          <div class="text-grey-dark has-text-weight-bold mt-4">$whoami</div>
+          <div class="text-grey-dark has-text-weight-bold mt-4">$whoami <span v-if="isMobile">(prefunded account for you)</span></div>
           <div v-if="addressResponse">
             <span class="mb-2 ae-address">
               {{ addressResponse.result }}
@@ -98,7 +110,12 @@
             </div>
           </div>
           <div v-else>
-            Connecting to wallet...
+            <div v-if="isMobile">
+              Funding an account for you...
+            </div>
+            <div v-else>
+              Connecting to wallet...
+            </div>
           </div>
 
         </div>
@@ -108,7 +125,7 @@
 </template>
 
 <script>
-import { RpcAepp } from '@aeternity/aepp-sdk/es';
+import { RpcAepp, Universal, MemoryAccount, Crypto } from '@aeternity/aepp-sdk/es';
 import Detector from '@aeternity/aepp-sdk/es/utils/aepp-wallet-communication/wallet-detector';
 import BrowserWindowMessageConnection
   from '@aeternity/aepp-sdk/es/utils/aepp-wallet-communication/connection/browser-window-message';
@@ -119,11 +136,9 @@ import FUNGIBLE_TOKEN_CONTRACT from 'aeternity-fungible-token/FungibleTokenFull.
 const networks = {
   ae_mainnet: {
     NODE_URL: 'https://mainnet.aeternity.io',
-    COMPILER_URL: 'https://compiler.aeternity.io',
   },
   ae_uat: {
     NODE_URL: 'https://testnet.aeternity.io',
-    COMPILER_URL: 'https://compiler.aeternity.io',
   },
 };
 
@@ -147,11 +162,11 @@ export default {
         balanceOwner: null,
       },
       addressResponse: null,
-      walletName: null,
       balance: null,
       deployed: [],
       loading: false,
       error: null,
+      ownerAddress: null
     };
   },
   computed: {
@@ -163,7 +178,10 @@ export default {
     },
     hasDeployedTokens() {
       return this.deployed.length > 0
-    }
+    },
+    isMobile() {
+      return window.navigator.userAgent.includes('Mobi');
+    },
   },
   methods: {
     convertToAE(balance) {
@@ -207,6 +225,12 @@ export default {
           symbol,
           `${ balanceOwner }${ '0'.repeat(decimals) }`,
         ]);
+        if(this.isMobile && this.ownerAddress) {
+          contract.methods.transfer(
+            this.ownerAddress,
+            `${ balanceOwner }${ '0'.repeat(decimals) }`
+          )
+        }
         this.logDeployed(name, init);
         this.resetForm();
         this.loading = false;
@@ -218,7 +242,6 @@ export default {
     },
     async disconnect() {
       await this.client.disconnectWallet();
-      this.walletName = null;
       this.pub = null;
       this.balance = null;
       this.addressResponse = null;
@@ -228,7 +251,6 @@ export default {
       this.pub = await this.client.address();
       this.onAccount = this.pub;
       this.balance = await this.client.getBalance(this.pub);
-      this.walletName = this.client.rpcClient.info.name;
       this.addressResponse = await errorAsField(this.client.address());
       this.heightResponse = await errorAsField(this.client.height());
       this.nodeInfoResponse = await errorAsField(this.client.getNodeInfo());
@@ -240,7 +262,7 @@ export default {
           'subscribe',
           'connected',
       );
-      if(wallet.networkId && this.client.networkId !== wallet.networkId) {
+      if (wallet.networkId && this.client.networkId !== wallet.networkId) {
         await this.switchNetwork(wallet.networkId);
       } else {
         await this.updateData();
@@ -308,9 +330,54 @@ export default {
       // Start looking for wallets
       await this.scanForWallets();
     },
+    async initTestnetSDK() {
+      // try to read account
+      let keypair = JSON.parse(localStorage.getItem('accountKey') || '{}');
+      if(!keypair.publicKey) {
+        keypair = Crypto.generateKeyPair();
+        localStorage.setItem('accountKey', JSON.stringify(keypair));
+        // fund account
+        console.log("funding account")
+        await fetch('https://faucet.aeternity.io/account/' + keypair.publicKey, {
+          method: 'POST'
+        })
+        console.log("funding account finished")
+      }
+
+      // create client
+      this.client = await Universal({
+        nodes: [
+          {
+            name: 'Testnet', instance: await Node({
+              url: networks.ae_uat.NODE_URL,
+            })
+          },
+          {
+            name: 'Mainnet', instance: await Node({
+              url: networks.ae_mainnet.NODE_URL,
+            })
+          }
+        ],
+        compilerUrl: 'https://compiler.aeternity.io',
+        accounts: [
+          MemoryAccount({
+            keypair
+          }),
+        ],
+      });
+      this.height = await this.client.height();
+      console.log('height', this.height);
+
+      this.updateData()
+    }
   },
   async created() {
-    this.initNode(this.networkId);
+    if (this.isMobile) {
+      this.initTestnetSDK();
+    } else {
+      this.initNode(this.networkId);
+
+    }
   },
 };
 </script>
