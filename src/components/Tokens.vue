@@ -27,35 +27,43 @@
             <form @submit.prevent="moreTokens">
               <div class="field">
                 <div class="control">
-                  <label class="is-justify-content-left">Name</label>
+                  <label class="is-justify-content-left">Collection Name</label>
                   <input
                       class="input is-primary"
                       type="text"
-                      v-model="token.name"
-                      placeholder="Token"
+                      v-model="collection.name"
+                      placeholder="Collection"
                   />
                 </div>
               </div>
               <div class="field">
                 <div class="control">
-                  <label>Symbol</label>
+                  <label>Collection Symbol</label>
                   <input
                       class="input is-primary"
                       type="text"
-                      v-model="token.symbol"
-                      placeholder="TKN"
+                      v-model="collection.symbol"
+                      placeholder="CLT"
                   />
                 </div>
               </div>
               <div class="field">
                 <div class="control">
-                  <label>Owner's balance</label>
+                  <label>NFT Name</label>
                   <input
                       class="input is-primary"
-                      type="number"
-                      v-model="token.balanceOwner"
-                      maxlength="15"
-                      placeholder="1000"
+                      type="text"
+                      v-model="nft.name"
+                  />
+                </div>
+              </div>
+              <div class="field">
+                <div class="control">
+                  <label>NFT URL</label>
+                  <input
+                      class="input is-primary"
+                      type="text"
+                      v-model="nft.url"
                   />
                 </div>
               </div>
@@ -135,8 +143,7 @@ import {
   walletDetector,
   BrowserWindowMessageConnection
 } from '@aeternity/aepp-sdk';
-import FUNGIBLE_TOKEN_CONTRACT from 'aeternity-fungible-token/FungibleTokenFull.aes';
-
+import NFT_CONTRACT from '../assets/nft';
 // Send wallet connection info to Aepp through content script
 const nodes = [
   { name: 'ae_uat', instance: new Node('https://testnet.aeternity.io') },
@@ -156,11 +163,14 @@ export default {
   data() {
     return {
       networkId: 'ae_mainnet',
-      token: {
+      collection: {
         name: null,
-        decimals: 18,
         symbol: null,
-        balanceOwner: null,
+        url: '',
+      },
+      nft: {
+        url: null,
+        name: null
       },
       addressResponse: null,
       balance: null,
@@ -192,14 +202,6 @@ export default {
       console.log(deployed);
       this.deployed.push({ name, address: deployed.address });
     },
-    resetForm() {
-      this.token = {
-        name: null,
-        decimals: 18,
-        symbol: null,
-        balanceOwner: null,
-      };
-    },
     async switchNetwork(networkId) {
       this.client.selectNode(networkId);
       this.networkId = networkId;
@@ -209,29 +211,31 @@ export default {
     async moreTokens() {
       this.error = null;
       try {
-        if (!this.token.name || !this.token.balanceOwner) {
+        if (!this.collection.name || !this.collection.symbol || !this.nft.name || !this.nft.url) {
           this.error = '⚠️ Oops ... fields are required.';
           return;
         }
         this.loading = true;
-        const { name, decimals, symbol, balanceOwner } = this.token;
         const contract = await this.client.getContractInstance({
-          source: FUNGIBLE_TOKEN_CONTRACT
+          source: NFT_CONTRACT
         });
         const init = await contract.deploy([
-          name,
-          decimals,
-          symbol,
-          `${balanceOwner}${'0'.repeat(decimals)}`,
+          this.collection.name,
+          this.collection.symbol,
         ]);
-        if (this.isMobile && this.ownerAddress) {
-          contract.methods.transfer(
-              this.ownerAddress,
-              `${balanceOwner}${'0'.repeat(decimals)}`
-          )
-        }
-        this.logDeployed(name, init);
-        this.resetForm();
+        const nft = {
+          "name": this.nft.name,
+          "media_type": "URL",
+          "media_url": this.nft.url,
+          "immutable_attributes": {},
+          "mutable_attributes": {}
+        };
+        const nftMetadataMapStringValues = new Map(Object.entries(nft).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : v]));
+        await contract.methods.mint(
+            this.ownerAddress || this.addressResponse.result,
+            { 'MetadataMap': [nftMetadataMapStringValues] }
+        );
+        this.logDeployed(this.collection.nam, init);
         this.loading = false;
       } catch (error) {
         console.error(error);
