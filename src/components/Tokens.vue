@@ -97,7 +97,8 @@
               address: <span class="has-text-weight-bold ae-contract-address">{{ token.address }}</span>
             </li>
           </ul>
-          <div class="text-grey-dark has-text-weight-bold mt-4">$whoami <span v-if="isMobile">(prefunded account for you)</span></div>
+          <div class="text-grey-dark has-text-weight-bold mt-4">$whoami <span v-if="isMobile">(prefunded account for you)</span>
+          </div>
           <div v-if="addressResponse">
             <span class="mb-2 ae-address">
               {{ addressResponse.result }}
@@ -125,22 +126,22 @@
 </template>
 
 <script>
-import { RpcAepp, Universal, MemoryAccount, Crypto } from '@aeternity/aepp-sdk/es';
-import Detector from '@aeternity/aepp-sdk/es/utils/aepp-wallet-communication/wallet-detector';
-import BrowserWindowMessageConnection
-  from '@aeternity/aepp-sdk/es/utils/aepp-wallet-communication/connection/browser-window-message';
-import Node from '@aeternity/aepp-sdk/es/node';
+import {
+  AeSdk,
+  MemoryAccount,
+  generateKeyPair,
+  Node,
+  AeSdkAepp,
+  walletDetector,
+  BrowserWindowMessageConnection
+} from '@aeternity/aepp-sdk';
 import FUNGIBLE_TOKEN_CONTRACT from 'aeternity-fungible-token/FungibleTokenFull.aes';
 
 // Send wallet connection info to Aepp through content script
-const networks = {
-  ae_mainnet: {
-    NODE_URL: 'https://mainnet.aeternity.io',
-  },
-  ae_uat: {
-    NODE_URL: 'https://testnet.aeternity.io',
-  },
-};
+const nodes = [
+  { name: 'ae_uat', instance: new Node('https://testnet.aeternity.io') },
+  { name: 'ae_mainnet', instance: new Node('https://mainnet.aeternity.io') },
+];
 
 const errorAsField = async fn => {
   try {
@@ -200,9 +201,7 @@ export default {
       };
     },
     async switchNetwork(networkId) {
-      const nodeToSelect = this.client.getNodesInPool()
-          .find((node) => node.nodeNetworkId === networkId);
-      this.client.selectNode(nodeToSelect.name);
+      this.client.selectNode(networkId);
       this.networkId = networkId;
       console.log('switchNetwork', networkId);
       await this.updateData();
@@ -223,12 +222,12 @@ export default {
           name,
           decimals,
           symbol,
-          `${ balanceOwner }${ '0'.repeat(decimals) }`,
+          `${balanceOwner}${'0'.repeat(decimals)}`,
         ]);
-        if(this.isMobile && this.ownerAddress) {
+        if (this.isMobile && this.ownerAddress) {
           contract.methods.transfer(
-            this.ownerAddress,
-            `${ balanceOwner }${ '0'.repeat(decimals) }`
+              this.ownerAddress,
+              `${balanceOwner}${'0'.repeat(decimals)}`
           )
         }
         this.logDeployed(name, init);
@@ -240,30 +239,17 @@ export default {
         this.error = '⚠️ Oops ... something went wrong.';
       }
     },
-    async disconnect() {
-      await this.client.disconnectWallet();
-      this.pub = null;
-      this.balance = null;
-      this.addressResponse = null;
-      this.scanForWallets();
-    },
     async updateData() {
       this.pub = await this.client.address();
-      this.onAccount = this.pub;
       this.balance = await this.client.getBalance(this.pub);
       this.addressResponse = await errorAsField(this.client.address());
-      this.heightResponse = await errorAsField(this.client.height());
-      this.nodeInfoResponse = await errorAsField(this.client.getNodeInfo());
-      this.networkId = this.client.selectedNode.networkId;
+      this.networkId = this.client.getNetworkId();
     },
     async connectToWallet(wallet) {
-      await this.client.connectToWallet(await wallet.getConnection());
-      this.accounts = await this.client.subscribeAddress(
-          'subscribe',
-          'connected',
-      );
-      if (wallet.networkId && this.client.networkId !== wallet.networkId) {
-        await this.switchNetwork(wallet.networkId);
+      const { networkId } = await this.client.connectToWallet(wallet.getConnection());
+      await this.client.subscribeAddress('subscribe', 'connected');
+      if (networkId && await this.client.getNetworkId() !== networkId) {
+        await this.switchNetwork(networkId);
       } else {
         await this.updateData();
       }
@@ -272,40 +258,29 @@ export default {
       try {
         const handleWallets = async function ({ wallets, newWallet }) {
           newWallet = newWallet || Object.values(wallets)[0];
-          this.detector.stopScan();
+          stopScan();
           await this.connectToWallet(newWallet);
         };
 
-        const scannerConnection = await BrowserWindowMessageConnection({
+        const scannerConnection = new BrowserWindowMessageConnection({
           connectionInfo: { id: 'spy' },
         });
-        this.detector = await Detector({ connection: scannerConnection });
-        this.detector.scan(handleWallets.bind(this));
+        const stopScan = walletDetector(scannerConnection, handleWallets.bind(this));
       } catch (e) {
         console.log(e);
       }
     },
-    async initNode(networkId) {
+    async initNode() {
       const that = this;
-      this.client = await RpcAepp({
-        name: 'AEPP',
-        nodes: [
-          {
-            name: 'Testnet', instance: await Node({
-              url: networks.ae_uat.NODE_URL,
-            })
-          },
-          {
-            name: 'Mainnet', instance: await Node({
-              url: networks.ae_mainnet.NODE_URL,
-            })
-          }
-        ],
-        compilerUrl: networks[networkId].COMPILER_URL,
+
+      this.client = new AeSdkAepp({
+        name: 'More Tokens',
+        nodes,
+        compilerUrl: 'https://compiler.aeternity.io',
         onNetworkChange(params) {
           if (this.getNetworkId() !== params.networkId) {
             console.log(
-                `Detected wallet network switch. Trying to initialize node for ${ params.networkId }`,
+                `Detected wallet network switch. Trying to initialize node for ${params.networkId}`,
             );
             that.switchNetwork(params.networkId);
           }
@@ -325,7 +300,6 @@ export default {
         },
       });
       this.height = await this.client.height();
-      console.log('height', this.height);
 
       // Start looking for wallets
       await this.scanForWallets();
@@ -333,8 +307,8 @@ export default {
     async initTestnetSDK() {
       // try to read account
       let keypair = JSON.parse(localStorage.getItem('accountKey') || '{}');
-      if(!keypair.publicKey) {
-        keypair = Crypto.generateKeyPair();
+      if (!keypair.publicKey) {
+        keypair = generateKeyPair();
         localStorage.setItem('accountKey', JSON.stringify(keypair));
         // fund account
         console.log("funding account")
@@ -345,38 +319,24 @@ export default {
       }
 
       // create client
-      this.client = await Universal({
-        nodes: [
-          {
-            name: 'Testnet', instance: await Node({
-              url: networks.ae_uat.NODE_URL,
-            })
-          },
-          {
-            name: 'Mainnet', instance: await Node({
-              url: networks.ae_mainnet.NODE_URL,
-            })
-          }
-        ],
+      this.client = new AeSdk({
+        nodes,
         compilerUrl: 'https://compiler.aeternity.io',
-        accounts: [
-          MemoryAccount({
-            keypair
-          }),
-        ],
       });
+      this.client.addAccount(
+          new MemoryAccount({ keypair }), { select: true })
       this.height = await this.client.height();
       console.log('height', this.height);
 
       this.updateData()
-    }
+    },
+
   },
   async created() {
     if (this.isMobile) {
       this.initTestnetSDK();
     } else {
       this.initNode(this.networkId);
-
     }
   },
 };
