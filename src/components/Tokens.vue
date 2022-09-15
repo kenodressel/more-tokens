@@ -243,7 +243,7 @@ export default {
       this.pub = await this.client.address();
       this.balance = await this.client.getBalance(this.pub);
       this.addressResponse = await errorAsField(this.client.address());
-      this.networkId = this.client.getNetworkId();
+      this.networkId = await this.client.getNetworkId();
     },
     async connectToWallet(wallet) {
       const { networkId } = await this.client.connectToWallet(wallet.getConnection());
