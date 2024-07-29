@@ -5,10 +5,10 @@
 </template>
 
 <script>
-import Tokens from './components/Tokens.vue';
+import Tokens from "./components/Tokens.vue";
 
 export default {
-  name: 'App',
+  name: "App",
   components: {
     Tokens,
   },
